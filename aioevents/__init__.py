@@ -65,6 +65,7 @@ class _Worker(threading.Thread):
 
         self._manager = manager
         self._stopped = False
+        self._main_loop = None
 
     @property
     def queue(self):
