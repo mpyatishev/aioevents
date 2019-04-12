@@ -33,13 +33,11 @@ async def two():
 
 
 async def main():
-    aioevents.worker.start()
-    aioevents.worker.set_main_event_loop(asyncio.get_event_loop())
+    aioevents.start(asyncio.get_event_loop())
 
     await asyncio.gather(one(), two())
 
-    aioevents.worker.stop()
-    aioevents.worker.join()
+    aioevents.stop()
 
     # wait for all coroutines
     await asyncio.sleep(1)

@@ -106,7 +106,7 @@ class _Worker(threading.Thread):
 
 
 class _Events(AbstractAsyncContextManager):
-    def __init__(self):
+    def __init__(self, worker):
         self._queue = worker.queue
 
     async def publish(self, event: Event):
@@ -122,4 +122,14 @@ class _Events(AbstractAsyncContextManager):
 manager = _Manager()
 register = manager.register
 worker = _Worker(manager)
-events = _Events()
+events = _Events(worker)
+
+
+def start(loop):
+    worker.set_main_event_loop(loop)
+    worker.start()
+
+
+def stop():
+    worker.stop()
+    worker.join()
