@@ -30,7 +30,7 @@ TEvent = Type[Event]
 
 
 class _Manager:
-    handlers: DefaultDict[TEvent, List[Callable]] = defaultdict(list)
+    _handlers: DefaultDict[TEvent, List[Callable]] = defaultdict(list)
 
     def register(self, events: Union[TEvent, Sequence[TEvent]], **kwargs):
         if not isinstance(events, abc.Sequence):
@@ -40,7 +40,7 @@ class _Manager:
 
         def deco(func: Callable) -> Callable:
             for event in self._events:
-                self.handlers[event].append(func)
+                self._handlers[event].append(func)
 
             @wraps(func)
             def wrapper(*fargs, **fkwargs) -> Callable:
@@ -52,8 +52,8 @@ class _Manager:
 
     def get(self, event: Event) -> List[Callable]:
         if not isinstance(event, type):
-            return self.handlers[event.__class__]
-        return self.handlers[event]
+            return self._handlers[event.__class__]
+        return self._handlers[event]
 
 
 class _Worker(threading.Thread):
@@ -102,7 +102,7 @@ class _Worker(threading.Thread):
                         main_loop
                     )
                 async_q.task_done()
-            await asyncio.sleep(0.001)  # let other coroutine work
+            await asyncio.sleep(0.0001)  # let other coroutines work
 
 
 class _Events(AbstractAsyncContextManager):
@@ -110,10 +110,12 @@ class _Events(AbstractAsyncContextManager):
         self._queue = worker.queue
 
     async def publish(self, event: Event):
-        asyncio.run_coroutine_threadsafe(
+        future = asyncio.run_coroutine_threadsafe(
             self._queue.put(event),
             worker.get_event_loop()
         )
+        future.result()  # wait for the event to be saved in the queue
+        await asyncio.sleep(0.0001)  # let other coroutines work
 
     async def __aexit__(self, *args, **kwargs):
         return None
