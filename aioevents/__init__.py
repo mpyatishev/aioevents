@@ -5,7 +5,15 @@ from collections import defaultdict, abc
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from functools import wraps
-from typing import DefaultDict, Callable, List, Sequence, Type, Union
+from typing import (
+    Callable,
+    DefaultDict,
+    List,
+    Optional,
+    Sequence,
+    Type,
+    Union,
+)
 
 import janus
 
