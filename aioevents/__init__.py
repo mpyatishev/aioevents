@@ -61,6 +61,19 @@ class _Manager:
 
         return deco
 
+    def clear(self, events: Optional[Union[TEvent, Sequence[TEvent]]] = None):
+        _events: Sequence[TEvent] = tuple()
+
+        if events is None:
+            _events = tuple(self._handlers.keys())
+        elif not isinstance(events, abc.Sequence):
+            _events = (events,)
+        else:
+            _events = events
+
+        for event in _events:
+            del self._handlers[event]
+
     def get(self, event: Event) -> List[Callable]:
         if not isinstance(event, type):
             return self._handlers[event.__class__]
