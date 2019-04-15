@@ -1,3 +1,4 @@
+janus
 -e .
 pytest
 pytest-asyncio
@@ -6,4 +7,3 @@ mypy
 codecov
 pytest-cov
 
-janus
