@@ -7,6 +7,7 @@ python:
 
 
 install:
+  - pip install janus
   - pip install -r requirements-dev.txt
 
 script:
