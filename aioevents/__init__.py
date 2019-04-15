@@ -1,8 +1,14 @@
 import asyncio
+import sys
 import threading
 
 from collections import defaultdict, abc
-from contextlib import AbstractAsyncContextManager
+
+if (3, 5) <= sys.version_info < (3, 7):
+    from typing import AsyncContextManager as AbstractAsyncContextManager
+else:
+    from contextlib import AbstractAsyncContextManager
+
 from dataclasses import dataclass
 from functools import wraps
 from typing import (
