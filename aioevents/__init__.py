@@ -38,6 +38,9 @@ TEvent = Type[Event]
 
 
 class _Manager:
+    __slots__ = (
+        '_events',
+    )
     _handlers: DefaultDict[TEvent, List[Callable]] = defaultdict(list)
 
     def register(self, events: Union[TEvent, Sequence[TEvent]], **kwargs):
@@ -65,6 +68,11 @@ class _Manager:
 
 
 class _Worker(threading.Thread):
+    __slots__ = (
+        '_main_loop',
+        '_manager',
+        '_stopped',
+    )
     _loop = asyncio.new_event_loop()
     _queue: janus.Queue = janus.Queue(loop=_loop)
 
@@ -114,8 +122,17 @@ class _Worker(threading.Thread):
 
 
 class _Events(AbstractAsyncContextManager):
-    def __init__(self, worker):
+    __slots__ = (
+        '_queue',
+    )
+
+    _sleep = 0.001
+
+    def __init__(self, worker, sleep: float = None):
         self._queue = worker.queue
+
+        if sleep is not None:
+            self._sleep = sleep
 
     async def publish(self, event: Event):
         future = asyncio.run_coroutine_threadsafe(
@@ -123,7 +140,7 @@ class _Events(AbstractAsyncContextManager):
             worker.get_event_loop()
         )
         future.result()  # wait for the event to be saved in the queue
-        await asyncio.sleep(0.0001)  # let other coroutines work
+        await asyncio.sleep(self._sleep)  # let other coroutines work
 
     async def __aexit__(self, *args, **kwargs):
         return None
