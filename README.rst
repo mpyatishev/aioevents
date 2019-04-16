@@ -12,6 +12,18 @@ aioevents
 A simple library for managing events through an asynchronous queue
 
 
+Installation
+============
+
+.. code:: bash
+   pip install aioevents
+
+`Note`: for python 3.6 you need to install ``dataclasses``
+
+.. code:: bash
+   pip install dataclasses
+
+
 Usage example
 =============
 
