@@ -1,6 +1,13 @@
 =========
 aioevents
 =========
+.. image:: https://travis-ci.com/mpyatishev/aioevents.svg?branch=master
+    :target: https://travis-ci.com/mpyatishev/aioevents
+.. image:: https://codecov.io/gh/mpyatishev/aioevents/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/mpyatishev/aioevents
+.. image:: https://img.shields.io/pypi/v/aioevents.svg
+    :target: https://pypi.python.org/pypi/aioevents
+
 
 A simple library for managing events through an asynchronous queue
 
@@ -46,3 +53,8 @@ Usage example
 
    if __name__ == "__main__":
       asyncio.run(main())
+
+
+License
+=======
+``aioevents`` library is offered under Apache 2 license.
