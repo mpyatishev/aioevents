@@ -25,6 +25,6 @@ deploy:
   distributions: sdist bdist_wheel
   skip_existing: true
   on:
-    # tags: true
+    tags: true
     all_branches: true
     python: 3.7
