@@ -32,7 +32,7 @@ __all__ = (
     "worker",
 )
 
-__VERSION__ = "0.0.2"
+__VERSION__ = "0.0.3"
 
 
 @dataclass
