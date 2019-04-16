@@ -8,6 +8,8 @@ pytest = "*"
 pytest-asyncio = "*"
 pytest-pspec = "*"
 mypy = "*"
+codecov = "*"
+pytest-cov = "*"
 
 [packages]
 janus = "*"
