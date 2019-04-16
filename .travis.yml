@@ -1,12 +1,14 @@
 dist: xenial   # required for Python >= 3.7
 language: python
 
-python:
-  - "3.7"
-
+matrix:
+  include:
+    - python: '3.6'
+      env: EXTRA_PACKAGES='dataclasses'
+    - python: '3.7'
 
 install:
-  - pip install janus
+  - pip install janus $EXTRA_PACKAGES
   - pip install -r requirements-dev.txt
 
 script:
