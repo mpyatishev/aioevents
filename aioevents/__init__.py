@@ -137,7 +137,7 @@ class _Worker(threading.Thread):
                         main_loop
                     )
                 async_q.task_done()
-            await asyncio.sleep(0.0001)  # let other coroutines work
+            await asyncio.sleep(0.01)  # let other coroutines work
 
 
 class _Events(AbstractAsyncContextManager):
