@@ -35,6 +35,42 @@ __all__ = (
 __VERSION__ = "0.0.4"
 
 
+class CycleStop(Exception):
+    pass
+
+
+class Cycle:
+    def __init__(self, sleep=0.3):
+        self._sleep = sleep
+        self._instance = None
+
+    def __call__(self, func, *args, **kwargs):
+        self._func = func
+        return self
+
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+
+        self._instance = instance
+        return self.wrapper
+
+    async def wrapper(self, *args, **kwargs):
+        loop = asyncio.get_running_loop()
+        try:
+            if self._instance:
+                await self._func(self._instance, *args, **kwargs)
+            else:
+                await self._func(*args, **kwargs)
+        except CycleStop:
+            pass
+        except Exception as e:
+            print(e)
+        else:
+            await asyncio.sleep(self._sleep, loop)
+            task = await loop.create_task(self.wrapper(*args, **kwargs))
+
+
 @dataclass
 class Event:
     pass
@@ -107,9 +143,19 @@ class _Worker(threading.Thread):
         return self._queue.async_q
 
     def run(self):
-        self._loop.run_until_complete(self.main())
+        loop = self._loop
 
-        self._loop.close()
+        try:
+            loop.run_until_complete(self.main())
+        except Exception as e:
+            print(e)
+
+        try:
+            tasks = asyncio.all_tasks(loop)
+            loop.run_until_complete(asyncio.gather(*tasks, loop=loop))
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            loop.close()
 
     def stop(self):
         self._stopped = True
@@ -120,24 +166,27 @@ class _Worker(threading.Thread):
     def get_event_loop(self):
         return self._loop
 
+    @Cycle(sleep=0.01)
     async def main(self):
         async_q = self._queue.async_q
         manager = self._manager
         main_loop = self._main_loop
-        while not (self._stopped and async_q.empty()):
-            try:
-                event = async_q.get_nowait()
-            except asyncio.QueueEmpty:
-                pass
-            else:
-                coros = manager.get(event)
-                for coro in coros:
-                    asyncio.run_coroutine_threadsafe(
-                        coro(event),
-                        main_loop
-                    )
-                async_q.task_done()
-            await asyncio.sleep(0.01)  # let other coroutines work
+        if (self._stopped and async_q.empty()):
+            raise CycleStop()
+
+        try:
+            event = async_q.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
+        else:
+            coros = manager.get(event)
+            for coro in coros:
+                print(f'call {coro} with {event}')
+                asyncio.run_coroutine_threadsafe(
+                    coro(event),
+                    main_loop
+                )
+            async_q.task_done()
 
 
 class _Events(AbstractAsyncContextManager):

@@ -16,7 +16,7 @@ async def event_hadler(event: aioevents.Event):
     print(f"recieved: {event}")
 
 
-events_num = 5000
+events_num = 2
 
 
 async def one():
@@ -40,10 +40,12 @@ async def two():
 
 
 async def main():
-    aioevents.start(asyncio.get_event_loop())
+    loop = asyncio.get_event_loop()
+    aioevents.start(loop)
 
     await asyncio.gather(one(), two())
 
+    await asyncio.sleep(10)
     print('stopping worker')
     aioevents.stop()
 
