@@ -69,8 +69,7 @@ def queue():
 
 @pytest.fixture
 def worker(manager, loop, queue):
-    worker = _Worker(manager)
-    worker._queue = queue
+    worker = _Worker(manager, queue, asyncio.new_event_loop())
     worker.set_main_event_loop(loop)
     yield worker
 
