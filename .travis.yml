@@ -6,7 +6,7 @@ matrix:
       env: EXTRA_PACKAGES='dataclasses'
     - python: '3.7'
 install:
-  - pip install janus $EXTRA_PACKAGES
+  - pip install janus aiorecycle $EXTRA_PACKAGES
   - pip install -r requirements-dev.txt
 script:
   - pytest tests --cov=aioevents
