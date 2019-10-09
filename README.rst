@@ -20,12 +20,6 @@ Installation
 
    pip install aioevents-ng
 
-`Note`: for python 3.6 you need to install ``dataclasses``
-
-.. code:: bash
-
-   pip install dataclasses
-
 
 Usage example
 =============

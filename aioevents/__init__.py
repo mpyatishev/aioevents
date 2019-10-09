@@ -1,17 +1,8 @@
 import asyncio
-import functools
-import sys
 import threading
 
 from collections import defaultdict, abc
-
-import aiorecycle
-
-if (3, 5) <= sys.version_info < (3, 7):
-    from typing import AsyncContextManager as AbstractAsyncContextManager
-else:
-    from contextlib import AbstractAsyncContextManager
-
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from functools import wraps
 from typing import (
@@ -23,6 +14,9 @@ from typing import (
     Type,
     Union,
 )
+
+
+import aiorecycle
 
 from janus import Queue
 
