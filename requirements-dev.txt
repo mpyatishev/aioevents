@@ -6,4 +6,4 @@ pytest-pspec
 mypy
 codecov
 pytest-cov
-
+aiorecycle
