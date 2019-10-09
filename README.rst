@@ -6,8 +6,8 @@ aioevents
     :target: https://travis-ci.com/mpyatishev/aioevents
 .. image:: https://codecov.io/gh/mpyatishev/aioevents/branch/master/graph/badge.svg
     :target: https://codecov.io/gh/mpyatishev/aioevents
-.. image:: https://img.shields.io/pypi/v/aioevents.svg
-    :target: https://pypi.python.org/pypi/aioevents
+.. image:: https://img.shields.io/pypi/v/aioevents-ng.svg
+    :target: https://pypi.python.org/pypi/aioevents-ng
 
 
 A simple library for managing events through an asynchronous queue
