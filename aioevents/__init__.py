@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import threading
 
 from collections import defaultdict, abc
@@ -14,7 +15,6 @@ from typing import (
     Type,
     Union,
 )
-
 
 import aiorecycle
 
@@ -32,6 +32,9 @@ __all__ = (
 __VERSION__ = "0.0.5"
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class Event:
     pass
@@ -40,13 +43,32 @@ class Event:
 TEvent = Type[Event]
 
 
+class _Task:
+    def __init__(self, func, retry=None, *args, **kwargs):
+        self._retries = retry
+        self._func = func
+
+    def can_retry(self):
+        return self._retries and self._retries > 0
+
+    def __call__(self, event):
+        if self._retries:
+            self._retries -= 1
+        return self._func(event)
+
+
 class _Manager:
     __slots__ = (
         '_events',
     )
     _handlers: DefaultDict[TEvent, List[Callable]] = defaultdict(list)
 
-    def register(self, events: Union[TEvent, Sequence[TEvent]], **kwargs):
+    def register(
+        self,
+        events: Union[TEvent, Sequence[TEvent]],
+        retry: Optional[int] = None,
+        **kwargs
+    ):
         self._events: Sequence[TEvent]
 
         if not isinstance(events, abc.Sequence):
@@ -55,8 +77,9 @@ class _Manager:
             self._events = events
 
         def deco(func: Callable) -> Callable:
+            task = _Task(func, retry)
             for event in self._events:
-                self._handlers[event].append(func)
+                self._handlers[event].append(task)
 
             @wraps(func)
             def wrapper(*fargs, **fkwargs) -> Callable:
@@ -92,6 +115,7 @@ class _Worker(threading.Thread):
         '_manager',
         '_queue',
         '_stopped',
+        '_retry_queue',
     )
 
     def __init__(
@@ -108,6 +132,7 @@ class _Worker(threading.Thread):
         self._manager = manager
         self._stopped = False
         self._main_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._retry_queue: list = list()
 
     @property
     def queue(self):
@@ -123,6 +148,7 @@ class _Worker(threading.Thread):
 
         loop = self._loop
         try:
+            loop.create_task(self._do_retries())
             loop.run_until_complete(self.main())
             tasks = asyncio.all_tasks(loop)
             loop.run_until_complete(asyncio.gather(*tasks, loop=loop))
@@ -150,13 +176,41 @@ class _Worker(threading.Thread):
             await self._handle_event(event)
             async_q.task_done()
 
+    @aiorecycle.cycle(sleep=0.1)
+    async def _do_retries(self):
+        if self._stopped and not self._retry_queue:
+            raise aiorecycle.CycleStop()
+        elif self._retry_queue:
+            event, task = self._retry_queue.pop()
+            await self._do(task, event)
+
+    async def _do(
+        self,
+        task: Callable,
+        event: Event
+    ):
+        def future_done(future):
+            try:
+                future.result()
+            except Exception as e:
+                logger.exception(e)
+                if task.can_retry():
+                    self._retry_queue.append((event, task))
+
+        try:
+            future = asyncio.run_coroutine_threadsafe(
+                task(event),
+                self._main_loop
+            )
+            future.add_done_callback(future_done)
+        except Exception as e:
+            logger.exception(e)
 
     async def _handle_event(self, event: Event):
         manager = self._manager
-        main_loop = self._main_loop
 
-        for coro in manager.get(event):
-            asyncio.run_coroutine_threadsafe(coro(event), main_loop)
+        for task in manager.get(event):
+            await self._do(task, event)
 
 
 class _Events(AbstractAsyncContextManager):

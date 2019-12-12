@@ -11,9 +11,10 @@ import janus
 from aioevents import (
     Event,
 
-    _Manager,
-    _Worker,
     _Events,
+    _Manager,
+    _Task,
+    _Worker,
 )
 
 
@@ -23,11 +24,6 @@ class QueueMock(janus.Queue):
 
 class AsyncQueueMock:
     pass
-
-
-@pytest.fixture
-def loop():
-    return asyncio.get_event_loop()
 
 
 @pytest.fixture
@@ -68,9 +64,9 @@ def queue():
 
 
 @pytest.fixture
-def worker(manager, loop, queue):
+def worker(manager, event_loop, queue):
     worker = _Worker(manager, queue, asyncio.new_event_loop())
-    worker.set_main_event_loop(loop)
+    worker.set_main_event_loop(event_loop)
     yield worker
 
 
@@ -91,7 +87,10 @@ class TestManager:
         manager.register(Event)(handler)
 
         assert Event in manager._handlers
-        assert manager._handlers[Event] == [handler]
+
+        task = manager._handlers[Event][0]
+        assert isinstance(task, _Task)
+        assert task._func == handler
 
     def test_register_should_bind_events_to_handler(self, manager):
         """
@@ -108,7 +107,13 @@ class TestManager:
         manager.register(Event)(handler2)
 
         assert Event in manager._handlers
-        assert manager._handlers[Event] == [handler1, handler2]
+        for elem in manager._handlers[Event]:
+            assert isinstance(elem, _Task)
+        for task, handler in zip(
+            manager._handlers[Event],
+            [handler1, handler2]
+        ):
+            assert task._func == handler
 
     def test_register_with_different_events(self, manager):
         """
@@ -127,8 +132,16 @@ class TestManager:
         manager.register(Event)(handler1)
         manager.register(OtherEvent)(handler2)
 
-        assert manager._handlers[Event] == [handler1]
-        assert manager._handlers[OtherEvent] == [handler2]
+        assert Event in manager._handlers
+        assert OtherEvent in manager._handlers
+
+        task = manager._handlers[Event][0]
+        assert isinstance(task, _Task)
+        assert task._func == handler1
+
+        task = manager._handlers[OtherEvent][0]
+        assert isinstance(task, _Task)
+        assert task._func == handler2
 
     def test_get_should_return_list_of_handlers(self, manager):
         """
@@ -140,15 +153,20 @@ class TestManager:
 
         manager.register(Event)(handler)
 
-        assert manager.get(Event) == [handler]
-        assert manager.get(Event()) == [handler]
+        task = manager.get(Event)[0]
+        assert isinstance(task, _Task)
+        assert task._func == handler
+
+        task = manager.get(Event())[0]
+        assert isinstance(task, _Task)
+        assert task._func == handler
 
 
 class TestWorker:
     @pytest.mark.asyncio
     async def test_should_call_handler_with_consumed_event_in_another_loop(
         self,
-        loop,
+        event_loop,
         manager,
         worker,
         events,
@@ -165,11 +183,11 @@ class TestWorker:
         queue.put(Event)
         worker._stopped = True
 
-        expected = [mock.call(None, loop)]
+        expected = [mock.call(None, event_loop)]
 
         with mock.patch('aioevents.asyncio.run_coroutine_threadsafe') as m_run:
             await worker.main()
-            assert m_run.mock_calls == expected
+            assert expected in m_run.mock_calls
 
     @pytest.mark.asyncio
     async def test_should_stop_on_signal(self, worker):
@@ -182,6 +200,59 @@ class TestWorker:
         worker.join()
 
         assert not worker.is_alive()
+
+    @pytest.mark.asyncio
+    async def test_should_reenqueue_coro_on_exception(
+        self,
+        manager,
+        worker,
+        events,
+    ):
+        """
+        it should reenqueue the coroutine in case of exception other than CancelledError
+        """  # noqa
+
+        @manager.register(Event, retry=3)
+        async def handler(event):
+            raise Exception("some exception here")
+
+        queue = worker.queue
+        queue.put(Event)
+        worker._stopped = True
+
+        await worker.main()
+        assert queue.empty()
+        assert (Event, worker._manager.get(Event)[0]) in worker._retry_queue
+
+    @pytest.mark.asyncio
+    async def test_should_do_retries(
+        self,
+        manager,
+        worker,
+        events,
+    ):
+        """
+        it should process the list of retries
+        """
+
+        count = 0
+
+        @manager.register(Event, retry=3)
+        async def handler(event):
+            nonlocal count
+            count += 1
+            raise Exception("some exception here")
+
+        task = worker._manager.get(Event)[0]
+        initial_retries = task._retries
+
+        worker._retry_queue.append((Event, task))
+        worker._stopped = True
+
+        await worker._do_retries()
+
+        assert task._retries < initial_retries
+        assert count == 3
 
 
 class TestEvents:
