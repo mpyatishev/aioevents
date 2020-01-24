@@ -235,7 +235,7 @@ class TestWorker:
         it should process the list of retries
         """
 
-        count = 0
+        count = 1
 
         @manager.register(Event, retry=3)
         async def handler(event):
@@ -250,6 +250,10 @@ class TestWorker:
         worker._stopped = True
 
         await worker._do_retries()
+
+        curr = asyncio.current_task()
+        tasks = asyncio.all_tasks() - {curr}
+        await asyncio.gather(*tasks)
 
         assert task._retries < initial_retries
         assert count == 3

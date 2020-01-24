@@ -149,15 +149,17 @@ class _Worker(threading.Thread):
         loop = self._loop
         try:
             loop.create_task(self._do_retries())
-            loop.run_until_complete(self.main())
+            loop.create_task(self.main())
+            loop.run_forever()
+        finally:
             tasks = asyncio.all_tasks(loop)
             loop.run_until_complete(asyncio.gather(*tasks, loop=loop))
             loop.run_until_complete(loop.shutdown_asyncgens())
-        finally:
             loop.close()
 
     def stop(self):
         self._stopped = True
+        self.loop.stop()
 
     def set_main_event_loop(self, loop: asyncio.AbstractEventLoop):
         self._main_loop = loop
