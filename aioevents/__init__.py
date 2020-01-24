@@ -29,7 +29,7 @@ __all__ = (
     "worker",
 )
 
-__VERSION__ = "0.0.7"
+__VERSION__ = "0.0.8"
 
 
 logger = logging.getLogger(__name__)
