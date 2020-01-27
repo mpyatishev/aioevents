@@ -4,8 +4,6 @@ from unittest import mock
 
 import pytest
 
-import janus
-
 from aioevents import (
     Event,
 
