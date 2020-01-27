@@ -12,7 +12,6 @@ codecov = "*"
 pytest-cov = "*"
 
 [packages]
-janus = "*"
 aiorecycle = "*"
 
 [requires]

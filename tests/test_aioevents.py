@@ -1,7 +1,5 @@
 import asyncio
 
-from concurrent.futures import Future
-
 from unittest import mock
 
 import pytest
@@ -18,14 +16,6 @@ from aioevents import (
 )
 
 
-class QueueMock(janus.Queue):
-    pass
-
-
-class AsyncQueueMock:
-    pass
-
-
 @pytest.fixture
 def manager():
     manager = _Manager()
@@ -34,38 +24,21 @@ def manager():
 
 
 @pytest.fixture
-def queue():
-    mocked_queue = mock.MagicMock(spec=QueueMock)
-
-    class async_q:
-        _q = list()
-
-        def put(self, e):
-            self._q.append(e)
-
-        def empty(self):
-            return len(self._q) <= 0
-
-        def get_nowait(self):
-            try:
-                return self._q[0]
-            except IndexError:
-                raise asyncio.QueueEmpty
-
-        def task_done(self):
-            try:
-                del self._q[0]
-            except IndexError:
-                pass
-
-    mocked_queue.async_q = async_q()
-
-    return mocked_queue
+def new_loop():
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.stop()
+    loop.close()
 
 
 @pytest.fixture
-def worker(manager, event_loop, queue):
-    worker = _Worker(manager, queue, asyncio.new_event_loop())
+def queue(new_loop):
+    return asyncio.Queue(loop=new_loop)
+
+
+@pytest.fixture
+def worker(manager, event_loop, new_loop, queue):
+    worker = _Worker(manager, queue, new_loop)
     worker.set_main_event_loop(event_loop)
     yield worker
 
@@ -180,13 +153,14 @@ class TestWorker:
             pass
 
         queue = worker.queue
-        queue.put(Event)
-        worker._stopped = True
+        await queue.put(Event)
 
         expected = [mock.call(None, event_loop)]
 
         with mock.patch('aioevents.asyncio.run_coroutine_threadsafe') as m_run:
-            await worker.main()
+            worker.start()
+            worker.stop()
+            worker.join()
             assert expected in m_run.mock_calls
 
     @pytest.mark.asyncio
@@ -217,10 +191,14 @@ class TestWorker:
             raise Exception("some exception here")
 
         queue = worker.queue
-        queue.put(Event)
-        worker._stopped = True
+        await queue.put(Event)
 
-        await worker.main()
+        worker.start()
+        worker.stop()
+        worker.join()
+
+        await asyncio.sleep(0.001)  # let coro do its work
+
         assert queue.empty()
         assert (Event, worker._manager.get(Event)[0]) in worker._retry_queue
 
@@ -266,16 +244,15 @@ class TestEvents:
         it should publish event to the queue
         """
 
-        expected = [mock.call(None, worker._loop)]
-        future = Future()
-        future.set_result(None)
+        async def main():
+            pass
 
-        with mock.patch('aioevents.asyncio.run_coroutine_threadsafe') as m_run:
-            m_run.return_value = future
-
+        with mock.patch.object(worker, 'main') as m_main:
+            m_main.side_effect = main
+            worker.start()
             await events.publish(Event)
-
-            assert m_run.mock_calls == expected
+            worker.stop()
+            worker.join()
 
         assert not worker.queue.empty()
         assert worker.queue.get_nowait() == Event

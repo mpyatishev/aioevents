@@ -2,6 +2,8 @@ import asyncio
 import logging
 import threading
 
+from asyncio import Queue
+
 from collections import defaultdict, abc
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -17,8 +19,6 @@ from typing import (
 )
 
 import aiorecycle
-
-from janus import Queue
 
 
 __all__ = (
@@ -136,7 +136,7 @@ class _Worker(threading.Thread):
 
     @property
     def queue(self):
-        return self._queue.async_q
+        return self._queue
 
     @property
     def loop(self):
@@ -152,6 +152,7 @@ class _Worker(threading.Thread):
             loop.create_task(self.main())
             loop.run_forever()
         finally:
+            self.queue.put_nowait(None)
             tasks = asyncio.all_tasks(loop)
             loop.run_until_complete(asyncio.gather(*tasks, loop=loop))
             loop.run_until_complete(loop.shutdown_asyncgens())
@@ -166,17 +167,16 @@ class _Worker(threading.Thread):
 
     @aiorecycle.cycle(sleep=0.01)
     async def main(self):
-        async_q = self._queue.async_q
-        if (self._stopped and async_q.empty()):
+        queue = self.queue
+        if (self._stopped and queue.empty()):
             raise aiorecycle.CycleStop()
 
-        try:
-            event = async_q.get_nowait()
-        except asyncio.QueueEmpty:
-            pass
-        else:
-            await self._handle_event(event)
-            async_q.task_done()
+        event = await queue.get()
+        if event is None:  # indicates end of work
+            return
+
+        task = self.loop.create_task(self._handle_event(event))
+        task.add_done_callback(lambda fut: queue.task_done())
 
     @aiorecycle.cycle(sleep=0.1)
     async def _do_retries(self):
@@ -186,11 +186,7 @@ class _Worker(threading.Thread):
             event, task = self._retry_queue.pop()
             await self._do(task, event)
 
-    async def _do(
-        self,
-        task: Callable,
-        event: Event
-    ):
+    async def _do(self, task: Callable, event: Event):
         def future_done(future):
             try:
                 future.result()
